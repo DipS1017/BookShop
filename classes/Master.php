@@ -20,6 +20,7 @@ Class Master extends DBConnection {
 			exit;
 		}
 	}
+	
 	function save_category(){
 		extract($_POST);
 		$data = "";
@@ -397,67 +398,71 @@ Class Master extends DBConnection {
 	function place_order(){
 		extract($_POST);
 		$client_id = $this->settings->userdata('id');
-		$token = isset($_POST['token']) ? sanitize_input($_POST['token']) : '';
+		$payment_token = isset($_POST['payment_token']) ? $_POST['payment_token'] : '';
+	
+		// Log received token for debugging
+		error_log("Received Token: " . $payment_token);
 	
 		// Use the 'paid' field to track payment status
-		$order_sql = "INSERT INTO `orders` (client_id, payment_method, order_type, amount, paid, delivery_address, status, token, payment_status) 
-		VALUES ('$client_id', '$payment_method', '$order_type', '$amount', '$paid', '$delivery_address', 0, '$token', 0)";
-
+		$order_sql = "INSERT INTO `orders` (client_id, payment_method, order_type, amount, paid, delivery_address, status, payment_token, payment_status) 
+		VALUES ('$client_id', '$payment_method', '$order_type', '$amount', '$paid', '$delivery_address', 0, '$payment_token', 0)";
 	
 		$save_order = $this->conn->query($order_sql);
 	
-		if ($this->capture_err())
-			return $this->capture_err();
-	
-		if ($save_order) {
-			$order_id = $this->conn->insert_id;
-			$data = '';
-	
-			$cart = $this->conn->query("SELECT c.*, p.title, i.price, p.id as pid FROM `cart` c 
-									   INNER JOIN `inventory` i ON i.id=c.inventory_id 
-									   INNER JOIN products p ON p.id = i.product_id 
-									   WHERE c.client_id ='{$client_id}' ");
-	
-			while ($row = $cart->fetch_assoc()) {
-				if (!empty($data))
-					$data .= ", ";
-	
-				$total = $row['price'] * $row['quantity'];
-				$data .= "('{$order_id}','{$row['pid']}','{$row['quantity']}','{$row['price']}', $total)";
-			}
-	
-			$list_sql = "INSERT INTO `order_list` (order_id, product_id, quantity, price, total) VALUES {$data} ";
-			$save_olist = $this->conn->query($list_sql);
-	
-			if ($this->capture_err())
-				return $this->capture_err();
-	
-			if ($save_olist) {
-				$empty_cart = $this->conn->query("DELETE FROM `cart` WHERE client_id = '{$client_id}'");
-	
-				// Update the 'paid' status to 1 to indicate successful payment
-				$this->conn->query("UPDATE `orders` SET payment_status = 1 WHERE id = '$order_id'");
-	
-				$data = " order_id = '{$order_id}'";
-				$data .= " ,total_amount = '{$amount}'";
-				$save_sales = $this->conn->query("INSERT INTO `sales` SET $data");
-	
-				if ($this->capture_err())
-					return $this->capture_err();
-	
-				$resp['status'] ='success';
-			} else {
-				$resp['status'] ='failed';
-				$resp['err_sql'] =$save_olist;
-			}
-	
-		} else {
-			$resp['status'] ='failed';
-			$resp['err_sql'] =$save_order;
+		if (!$save_order) {
+			$resp['status'] = 'failed';
+			$resp['err_sql'] = $this->conn->error; // Log the error
+			echo json_encode($resp);
+			return;
 		}
-	
-		return json_encode($resp);
+		
+		$order_id = $this->conn->insert_id;
+		$data = '';
+		
+		$cart = $this->conn->query("SELECT c.*, p.title, i.price, p.id as pid FROM `cart` c 
+								   INNER JOIN `inventory` i ON i.id=c.inventory_id 
+								   INNER JOIN products p ON p.id = i.product_id 
+								   WHERE c.client_id ='{$client_id}' ");
+		
+		while ($row = $cart->fetch_assoc()) {
+			if (!empty($data))
+				$data .= ", ";
+			
+			$total = $row['price'] * $row['quantity'];
+			$data .= "('{$order_id}','{$row['pid']}','{$row['quantity']}','{$row['price']}', $total)";
+		}
+		
+		$list_sql = "INSERT INTO `order_list` (order_id, product_id, quantity, price, total) VALUES {$data} ";
+		$save_olist = $this->conn->query($list_sql);
+		
+		if (!$save_olist) {
+			$resp['status'] = 'failed';
+			$resp['err_sql'] = $this->conn->error; // Log the error
+			echo json_encode($resp);
+			return;
+		}
+		
+		$empty_cart = $this->conn->query("DELETE FROM `cart` WHERE client_id = '{$client_id}'");
+		
+		// Update the 'paid' status to 1 to indicate successful payment
+		$this->conn->query("UPDATE `orders` SET payment_status = 1 WHERE id = '$order_id'");
+		
+		$data = " order_id = '{$order_id}'";
+		$data .= " ,total_amount = '{$amount}'";
+		$save_sales = $this->conn->query("INSERT INTO `sales` SET $data");
+		
+		if (!$save_sales) {
+			$resp['status'] = 'failed';
+			$resp['err_sql'] = $this->conn->error; // Log the error
+			echo json_encode($resp);
+			return;
+		}
+		
+		$resp['status'] = 'success';
+		echo json_encode($resp);
 	}
+	
+	
 	
 	
 	function update_order_status(){

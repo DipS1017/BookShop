@@ -42,7 +42,7 @@
                 <h1 class="display-5 fw-bolder border-bottom border-primary pb-1"><?php echo $title ?></h1>
                 <p class="m-0"><small>By: <?php echo $author ?></small></p>
                 <div class="fs-5 mb-5">
-                &#8369; <span id="price"><?php echo number_format($inv[0]['price']) ?></span>
+                Rs. <span id="price"><?php echo($inv[0]['price']) ?></span>
                 <br>
                 <span><small><b>Available Stock:</b> <span id="avail"><?php echo $inv[0]['quantity'] ?></span></small></span>
                 </div>
@@ -99,7 +99,7 @@
                             <h5 class="fw-bolder"><?php echo $row['title'] ?></h5>
                             <!-- Product price-->
                             <?php foreach($_inv as $k=> $v): ?>
-                                <span><b>Price: </b><?php echo $v ?></span>
+                                <span><b>Price:Rs.</b><?php echo $v ?></span>
                             <?php endforeach; ?>
                             <p class="m-0"><small>By: <?php echo $row['author'] ?></small></p>
                         </div>

@@ -1,4 +1,7 @@
+<script src="https://code.jquery.com/jquery-3.6.4.min.js"></script>
 <script src="https://khalti.s3.ap-south-1.amazonaws.com/KPG/dist/2020.12.17.0.0.0/khalti-checkout.iffe.js"></script>
+
+
 <?php
 $total = 0;
 $qry = $conn->query("SELECT c.*,p.title,i.price,p.id as pid from `cart` c inner join `inventory` i on i.id=c.inventory_id inner join products p on p.id = i.product_id where c.client_id = ".$_settings->userdata('id'));
@@ -57,80 +60,86 @@ endwhile;
 </section>
 
 <script>
-    var config = {
-        "publicKey": "test_public_key_4eb78b46ce784eec8d6638a13eb53551",
-        "productIdentity": "1234567890",
-        "productName": "Product Name",
-        "productUrl": "http://example.com/product/url",
-        "paymentPreference": ["KHALTI", "EBANKING", "MOBILE_BANKING", "CONNECT_IPS", "SCT"],
-        "eventHandler": {
-            onSuccess(payload) {
-                // Khalti payment successful, handle accordingly
-                // Extract payment token from payload and store it
-                var paymentToken = payload.token;
-                $('#payment_token').val(paymentToken);
-                payment_online(paymentToken);
-            },
-            onError(error) {
-                console.log(error);
-            },
-            onClose() {
-                console.log('widget is closing');
-            }
+   var config = {
+    "publicKey": "test_public_key_4eb78b46ce784eec8d6638a13eb53551",
+    "productIdentity": "1234567890",
+    "productName": "Product Name",
+    "productUrl": "http://example.com/product/url",
+    "paymentPreference": ["KHALTI", "EBANKING", "MOBILE_BANKING", "CONNECT_IPS", "SCT"],
+    "eventHandler": {
+        onSuccess(payload) {
+    console.log("Khalti Payment Success. Payload:", payload);
+    var paymentToken = payload.token;
+
+    console.log("Payment Token:", paymentToken);
+    if (paymentToken) {
+        $('#payment_token').val(paymentToken);
+        payment_online(paymentToken);
+    } else {
+        console.log("Payment Token is empty or undefined.");
+    }
+},
+
+        onError(error) {
+            console.log(error);
+        },
+        onClose() {
+            console.log('widget is closing');
         }
-    };
+    }
+};
+
 
     var checkout = new KhaltiCheckout(config);
 
-    document.getElementById("khalti-button").onclick = function () {
-        event.preventDefault();
-        checkout.show({amount: <?php echo $total; ?> * 100});
-    };
+    document.getElementById("khalti-button").onclick = function (event) {
+    event.preventDefault();
+    checkout.show({ amount: <?php echo $total; ?> * 100 });
+};
 
-    function payment_online(paymentToken) {
-        // Set payment method to "Online Payment" and paid to 1
-        $('[name="payment_method"]').val("Online Payment");
-        $('[name="paid"]').val(1);
-        $('#place_order').submit();
-    }
+function payment_online(paymentToken) {
+    console.log("Payment Token for AJAX Request:", paymentToken);
 
-    $(function () {
-        $('[name="order_type"]').change(function () {
-            if ($(this).val() == 2) {
-                $('.address-holder').hide('slow');
+    // Set payment method to "Online Payment" and paid to 1
+    $('[name="payment_method"]').val("Online Payment");
+    $('[name="paid"]').val(1);
+
+    // Set the payment token in the hidden field
+    $('#payment_token').val(paymentToken);
+
+    // Use AJAX to submit the form data
+    $.ajax({
+        url: 'classes/Master.php?f=place_order',
+        method: 'POST',
+        data: $('#place_order').serialize(),
+        dataType: "json",
+        error: function (err) {
+            console.log(err);
+            alert_toast("An error occurred", "error");
+            end_loader(); // Add this line
+        },
+        success: function (resp) {
+            if (!!resp.status && resp.status == 'success') {
+                alert_toast("Order Successfully placed.", "success");
             } else {
-                $('.address-holder').show('slow');
+                console.log(resp);
+                alert_toast("An error occurred", "error");
             }
-        });
-
-        $('#place_order').submit(function (e) {
-            e.preventDefault();
-            start_loader();
-            $.ajax({
-                url: 'classes/Master.php?f=place_order',
-                method: 'POST',
-                data: $(this).serialize(),
-                dataType: "json",
-                error: err => {
-                    console.log(err);
-                    alert_toast("An error occurred", "error");
-                    end_loader();
-                },
-                success: function (resp) {
-                    e.preventDefault();
-                    if (!!resp.status && resp.status == 'success') {
-                        alert_toast("Order Successfully placed.", "success");
-                        setTimeout(function () {
-                            location.replace('./');
-                        }, 2000);
-                        
-                    } else {
-                        console.log(resp);
-                        alert_toast("An error occurred", "error");
-                        end_loader();
-                    }
-                }
-            });
-        });
+            end_loader(); // Add this line
+        }
     });
+}
+
+
+
+$(function () {
+    $('[name="order_type"]').change(function () {
+        if ($(this).val() == 2) {
+            $('.address-holder').hide('slow');
+        } else {
+            $('.address-holder').show('slow');
+        }
+    });
+});
+
 </script>
